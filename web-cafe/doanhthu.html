@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Trị Doanh Thu - Cát Tường Coffee</title>
+    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+
+    <style>
+        :root { 
+            --cong-green: #3a4d39; 
+            --cong-dark: #2a3829; 
+            --bg-beige: #f4f1ea; 
+            --sidebar-width: 260px; 
+        }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-beige); display: flex; margin: 0; min-height: 100vh; }
+        
+        /* Giao diện đăng nhập */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--cong-dark); display: flex; justify-content: center;
+            align-items: center; z-index: 9999; color: white;
+        }
+        .login-box {
+            background: white; padding: 30px; border-radius: 12px;
+            text-align: center; color: #333; width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .login-box h2 { font-family: 'Special Elite'; margin-bottom: 20px; color: var(--cong-green); }
+        .login-box input {
+            width: 100%; padding: 12px; margin-bottom: 15px;
+            border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; outline: none;
+        }
+        .login-box button {
+            width: 100%; padding: 12px; background: var(--cong-green);
+            color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s;
+        }
+        .login-box button:hover { background: #4a6149; }
+
+        /* Bố cục chính */
+        .sidebar { 
+            width: var(--sidebar-width); background: var(--cong-dark); 
+            height: 100vh; position: fixed; color: white; padding: 20px; 
+        }
+        .sidebar-brand { font-family: 'Special Elite'; font-size: 1.5rem; text-align: center; margin-bottom: 30px; color: #e9e4d7; border-bottom: 1px solid #444; padding-bottom: 15px; }
+        
+        .main-content { margin-left: var(--sidebar-width); flex-grow: 1; padding: 40px; display: none; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 25px; margin-bottom: 35px; }
+        .stat-card { background: white; padding: 25px; border-radius: 12px; border-left: 6px solid var(--cong-green); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .stat-card h3 { margin: 0 0 10px 0; font-size: 1rem; color: #666; text-transform: uppercase; }
+        .stat-card .value { font-size: 2.2rem; font-weight: 700; color: var(--cong-dark); }
+        
+        .content-box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background: #f8f9fa; padding: 15px; text-align: left; border-bottom: 2px solid #eee; color: #555; }
+        td { padding: 15px; border-bottom: 1px solid #eee; vertical-align: middle; }
+        .status-badge { background: #e8f5e9; color: #2e7d32; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <div id="login-overlay">
+        <div class="login-box">
+            <h2>CÁT TƯỜNG ADMIN</h2>
+            <input type="password" id="admin-password" placeholder="Nhập mật khẩu quản trị">
+            <button onclick="checkLogin()">ĐĂNG NHẬP</button>
+            <p id="login-error" style="color: red; font-size: 0.8rem; margin-top: 10px; display: none;">Mật khẩu không đúng!</p>
+        </div>
+    </div>
+
+    <aside class="sidebar">
+        <div class="sidebar-brand">CÁT TƯỜNG COFFEE</div>
+        <div style="font-size: 0.9rem; color: #888; text-align: center;">Hệ thống quản trị nội bộ</div>
+    </aside>
+
+    <main class="main-content" id="admin-main">
+        <h1 style="margin-bottom: 30px; color: var(--cong-dark);">Báo Cáo Doanh Thu Ngày</h1>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Doanh thu hôm nay</h3>
+                <div class="value" id="total-revenue">0đ</div>
+            </div>
+            <div class="stat-card">
+                <h3>Số lượng đơn hàng</h3>
+                <div class="value" id="total-orders">0</div>
+            </div>
+        </div>
+
+        <div class="content-box">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Danh sách món</th>
+                        <th>Thời gian</th>
+                        <th>Tổng tiền</th>
+                        <th>Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody id="order-list">
+                    </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        // Mật khẩu đăng nhập
+        function checkLogin() {
+            const pass = document.getElementById('admin-password').value;
+            if (pass === "cattuong") {
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('admin-main').style.display = 'block';
+                initFirebase();
+            } else {
+                alert("Sai mật khẩu!");
+            }
+        }
+
+        function initFirebase() {
+            const firebaseConfig = {
+                apiKey: "AIzaSyBsP5Xr4syz3VPSS0OKUtSHq07cOkiF68Y",
+                authDomain: "duanbancaphe-85d26.firebaseapp.com",
+                databaseURL: "https://duanbancaphe-85d26-default-rtdb.firebaseio.com",
+                projectId: "duanbancaphe-85d26",
+                storageBucket: "duanbancaphe-85d26.firebasestorage.app",
+                messagingSenderId: "100886910992",
+                appId: "1:100886910992:web:94f9dcaf30edaf51f45295"
+            };
+
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            const database = firebase.database();
+            
+            // Lấy ngày hiện tại theo định dạng VN để so khớp
+            const today = new Date().toLocaleDateString('vi-VN');
+
+            database.ref('orders').on('value', (snapshot) => {
+                const data = snapshot.val();
+                let ordersToday = [];
+                
+                if (data) {
+                    ordersToday = Object.keys(data)
+                        .map(key => data[key])
+                        // Lọc chính xác đơn hàng có ngày trùng với hôm nay
+                        .filter(order => order.date === today);
+                }
+
+                const orderList = document.getElementById('order-list');
+                
+                if (ordersToday.length === 0) {
+                    orderList.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999; padding: 20px;">Chưa có đơn hàng nào trong hôm nay.</td></tr>';
+                    document.getElementById('total-revenue').innerText = '0đ';
+                    document.getElementById('total-orders').innerText = '0';
+                    return;
+                }
+
+                // Hiển thị đơn hàng (Đơn mới nhất lên đầu)
+                orderList.innerHTML = ordersToday.slice().reverse().map(order => `
+                    <tr>
+                        <td style="font-weight: 500; line-height: 1.4;">
+                            <strong>${order.customer || "Khách lạ"} (${order.location || "Bàn ?"})</strong><br>
+                            <small style="color: #666;">${order.items ? order.items.join(", ") : "Không có món"}</small>
+                        </td>
+                        <td style="color: #666;">${order.time || ""}</td>
+                        <td style="font-weight: 700; color: var(--cong-green);">
+                            ${(order.total || 0).toLocaleString()}đ
+                        </td>
+                        <td><span class="status-badge">${order.status || 'Mới'}</span></td>
+                    </tr>
+                `).join('');
+
+                // Tính toán tổng số liệu
+                const totalRev = ordersToday.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+                document.getElementById('total-revenue').innerText = totalRev.toLocaleString() + 'đ';
+                document.getElementById('total-orders').innerText = ordersToday.length;
+            });
+        }
+    </script>
+</body>
+</html>
